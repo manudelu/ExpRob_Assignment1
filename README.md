@@ -85,12 +85,12 @@ roslaunch lab_assignment world.launch
 Flowchart 
 -----------------------
 
-Logic Node (Logic_node.cpp)
+`Logic Node` (Logic_node.cpp)
 * Subscribes to Aruco marker messages.
 * Controls the robot's movement based on marker detection.
 * Publishes velocity commands and marker IDs for searching.
 
-Aruco Marker Publisher Node (CV_node.cpp)
+`Aruco Marker Publisher Node` (CV_node.cpp)
 * Subscribes to target and camera feed messages.
 * Detects Aruco markers by processing them.
 * Publishes marker information for the Logic Node to control robot movement.
@@ -105,7 +105,7 @@ Node Graph
 Simulation
 -----------------------
 
-Here is the simulated behaviour of the robot, sped up to present a better flow of the video.
+Here is the simulated behaviour of the robot, sped up in order to present a better flow of the video.
 
 https://github.com/MickyMori/Lab_assignment_1/assets/104144305/29c77bec-d354-4027-9b30-6a5baf27b63d
 

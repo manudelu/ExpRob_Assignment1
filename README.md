@@ -1,6 +1,6 @@
-Experimental Robotics Laboratory - First Assignment
+Experimental Robotics Laboratory 🤖
 ======================================
-Aruco Marker Robot Navigation
+Aruco Marker Robot Navigation 
 ======================================
 
 Project Description
@@ -82,7 +82,7 @@ Finally, run the whole project by running the launch file:
 roslaunch lab_assignment world.launch
 ```
 
-Flowchart
+Flowchart 
 -----------------------
 
 Logic Node (Logic_node.cpp)

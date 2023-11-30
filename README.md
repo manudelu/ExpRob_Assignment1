@@ -1,6 +1,6 @@
 Experimental Robotics Laboratory 🤖
 ======================================
-Aruco Marker Robot Navigation :pin:
+Aruco Marker Robot Navigation
 ======================================
 
 Project Description 📎

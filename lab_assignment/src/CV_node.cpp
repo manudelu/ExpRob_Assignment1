@@ -66,8 +66,8 @@ private:
   ros::Subscriber search_sub;
 
   ros::Publisher marker_pub = nh_.advertise<lab_assignment::Marker>("/rosbot/aruco_marker", 1000);
-  image_transport::Publisher image_pub_;
   //image_transport::Publisher debug_pub_;
+  image_transport::Publisher image_pub_;
 
   cv::Mat inImage_;
   

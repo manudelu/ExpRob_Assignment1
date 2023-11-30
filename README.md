@@ -6,7 +6,7 @@ Aruco Marker Robot Navigation
 Project Description
 -------------------------
 
-This project involves controlling a robot's movement based on the detection and interaction with Aruco markers in its environment. The robot navigates through a predefined sequence of markers until it reaches the end. The implementation is done in `ROS Noetic`, both in simulation using the Gazebo environment and with an implementation on the real robot ([ROSbot](https://husarion.com/)).
+This project involves controlling a robot's and camera's movement based on the detection and interaction with Aruco markers in its environment. The robot navigates through a predefined sequence of markers until it reaches the end. The implementation is done in `ROS Noetic`, both in simulation using the Gazebo environment and with an implementation on the real robot ([ROSbot](https://husarion.com/)).
 
 The IDs of the markers have specific meanings:
 
@@ -16,8 +16,6 @@ The IDs of the markers have specific meanings:
 * Once marker 15 is found, the robot stops as it has completed its tasks.
 
 Notice that 'reach marker xxx' means that one side of the xxx marker must be greater than a certain pixel threshold in the camera frame.
-
-`Note:` The README for the `rotating_camera` branch contains details about a slightly different implementation for the project. However, it's important to note that the actual implementation on the real robot can only be achieved using a fixed camera.
 
 Team Members
 -------------
@@ -29,6 +27,7 @@ Team Members
 | 3 | Matteo | Cappellini | S4822622 |
 | 4 | Manuel | Delucchi | S4803977 |
 | 5 | Andrea | Bolla | S4482930 |
+
 
 Create and setup a Catkin Workspace
 --------------------------------
@@ -63,12 +62,14 @@ Move inside the package and clone our repository and the one containing the mark
 
 ```bash
 git clone https://github.com/CarmineD8/aruco_ros.git
-git clone https://github.com/MickyMori/Lab_assignment_1.git
+git clone https://github.com/MickyMori/Lab_assignment_1.git -b rotating_camera
 ```
 
 At first, to utilize the marker textures, copy the `models` folder from the `aruco_ros` package into `/root/.gazebo/models` directory (all new models should be put here, to let the camera work properly).
 
-Then, since inside the source folder there is new content, you need to type the command `catkin_make` inside the ROS workspace folder:
+In order to be able to control the camera link we had to modify the `rosbot_ros` package by adding the `motors_config.yaml` file inside the directory `rosbot_ros/src/rosbot_description/config` and modify the launch file accordingly.
+
+Then, since inside the source folder there is new content, it is needed to type the command `catkin_make` inside the ROS workspace folder:
 
 ```bash
 cd
@@ -87,7 +88,9 @@ Flowchart
 
 Logic Node (Logic_node.cpp)
 * Subscribes to Aruco marker messages.
-* Controls the robot's movement based on marker detection.
+* Controls the camera in order to find a new target.
+* When a target is found, aligns the base frame with the camera's orientation.
+* Move the robot towards the target.
 * Publishes velocity commands and marker IDs for searching.
 
 Aruco Marker Publisher Node (CV_node.cpp)
@@ -95,31 +98,22 @@ Aruco Marker Publisher Node (CV_node.cpp)
 * Detects Aruco markers by processing them.
 * Publishes marker information for the Logic Node to control robot movement.
 
-![Flowchart of the robot behaviour](lab_assignment/media/Flowchart_fixed_Camera.png)
+![Flowchart of the robot behaviour](lab_assignment/media/Flowchart_rotating_Camera.png)
 
-Node Graph 
+Node Graph
 -----------------------
 
-![Rqt Graph](lab_assignment/media/rosgraph_fixed.png)
+![Rqt Graph](lab_assignment/media/rosgraph_rot.png)
 
 Simulation
 -----------------------
 
 Here is the simulated behaviour of the robot, sped up to present a better flow of the video.
 
-https://github.com/MickyMori/Lab_assignment_1/assets/104144305/29c77bec-d354-4027-9b30-6a5baf27b63d
-
-Implementation on the Real Robot
------------------------
-
-Here we can observe the implementation on the real robot **ROSBOT 2**
-
-https://github.com/MickyMori/Lab_assignment_1/assets/97695681/a7ebad9f-b36e-41ab-a47f-61f6880f1ad1
+https://github.com/MickyMori/Lab_assignment_1/assets/104144305/4ddfdac8-d989-4ddd-af9c-f3ed96d629f1
 
 Possible Improvements
 -----------------------
 
 * Implement a more sophisticated navigation algorithm for smoother movement between markers.
-* Enhance error handling and recovery mechanisms for better resilience in marker detection scenarios, since the robot can struggle with the marker recognition.
-
-
+* Enhance error handling and recovery mechanisms for better resilience in marker detection scenarios, since the robot can sometimes struggle with the marker recognition.

@@ -1,145 +1,203 @@
-/**
- * @file Logic_node.cpp
- * @brief ROS node for controlling a robot's movement based on Aruco markers.
- */
+using namespace std;
 
-// Including necessary C++ and ROS libraries
-#include <iostream> /**< Standard input/output stream. */
-#include <ros/ros.h> /**< ROS (Robot Operating System) library. */
-#include <std_msgs/Int32.h> /**< ROS standard integer message type. */
-#include <geometry_msgs/Twist.h> /**< ROS geometry twist message type. */
-#include <unistd.h> /**< Standard symbolic constants and types. */
-#include <lab_assignment/Marker.h> /**< Custom message type for Aruco markers. */
+#define _USE_MATH_DEFINES
 
-// Constants for image processing and control
-const double img_center = 320; /**< Horizontal center of the image. */
-const double gain = 0.01; /**< Proportional gain for the controller. */
-const double target_area_size = 24000; /**< Target area size for marker detection. */
-const int number_of_markers = 4; /**< Numer of markers present in the environment */
-double ang_vel = 0.8; /**< Angular velocity for robot movement. */
-double lin_vel = 0.2; /**< Linear velocity for robot movement. */
-double error; /**< Error for the proportional controller. */
+#include <iostream>
+#include <ros/ros.h>
+#include <std_msgs/Int32.h>
+#include <std_msgs/Float64.h>
+#include <geometry_msgs/Twist.h>
+#include <unistd.h>
+#include <lab_assignment/Marker.h>
+#include <gazebo_msgs/LinkStates.h>
+#include <cmath>
 
-// Class definition for the logic of the robot
+//parameters
+const double img_center = 320;
+const double gain = 0.005;
+const double gain_base_cam = 10;
+const double target_area_size = 25000;
+const int number_of_markers = 4;
+double ang_vel = 0.8;
+double cam_vel = 1.0;
+double lin_vel = 0.2;
+//variables
+double error;
+double error_base_cam = 1;
+double cam_orientation[3];
+double base_orientation[3];
+double cam_w;
+double base_w;
+double cam_theta;
+double base_theta;
+
 class Logic
 {
 private:
-    // Params
-    int marker_ids[4] = {11, 12, 13, 15}; /**< Array of marker IDs to be detected. */
-    int index = 0; /**< Index to track the current marker in the array. */
-    bool flag = false; /**< Flag variable. */
-    std_msgs::Int32 set_target; /**< Message to set the target marker ID. */
-
-    // Create a node handle
-    ros::NodeHandle nh; /**< ROS NodeHandle for communication. */
-
-    // Create pub and sub
-    ros::Subscriber mrk_sub; /**< ROS subscriber for the Aruco marker topic. */
-    ros::Publisher cmd_vel_pub; /**< ROS publisher for robot velocity commands. */
-    ros::Publisher search_id_pub; /**< ROS publisher for searching a specific marker ID. */
-
+	// Params
+	int marker_ids[4] = {11, 12, 13, 15};
+	int index = 0;
+	std_msgs::Int32 set_target;
+	// Create a node handle
+	ros::NodeHandle nh;
+	// Create pub and sub
+	ros::Subscriber mrk_sub;
+	ros::Publisher cmd_vel_pub;
+	ros::Publisher search_id_pub;
+	ros::Publisher cam_vel_pub;
+	ros::Subscriber link_pose_sub;
 public:
-    // Constructor for the Logic class
-    /**
-     * @brief Constructs a Logic object and initializes ROS node, publishers, and subscribers.
-     */
-    Logic() : nh("~")
-    {
-        // Subscribe to marker topic
-        mrk_sub = nh.subscribe("/rosbot/aruco_marker", 1000, &Logic::marker_callback, this);
+	Logic(): nh("~")
+	{
+		mrk_sub = nh.subscribe("/rosbot/aruco_marker", 1000, &Logic::marker_callback, this);
+		link_pose_sub = nh.subscribe("/gazebo/link_states", 1000, &Logic::link_states_callback, this); 
+		
+		cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
+		cam_vel_pub = nh.advertise<std_msgs::Float64>("/astra_joint_velocity_controller/command", 10);
+		search_id_pub = nh.advertise<std_msgs::Int32>("/rosbot/search_id", 10);
+	
+	}
+	void marker_callback(const lab_assignment::Marker msg)
+	{
+		//use the controller to correct the position of the robot
+		controller(msg);
+		//search new marker
+		if(msg.id == -1) {
+			set_target.data = marker_ids[index];
+			search_id_pub.publish(set_target);
+			move_camera(cam_vel);
+		}
+		//if target found -> go next
+		else if(msg.area >= target_area_size){
+			index++;
+			move_rosbot(0.0,0.0);
+			if(index == number_of_markers){
+				ros::shutdown();
+			}
+			cam_vel = 1.0;
+			error_base_cam = 1;
+			move_camera(cam_vel);
+			set_target.data = marker_ids[index];
+			search_id_pub.publish(set_target);
+		}
+		//if marker is in the center of the image align base and camera and then move forward 	
+		else if((msg.center.x < (img_center + 50) && msg.center.x > (img_center - 50)))
+		{
+			move_camera(0.0);
+			if(abs(error_base_cam)<0.01)
+			{
+				move_rosbot(lin_vel, 0.0);
+			}else{
+				align_base_cam();
+				move_camera(cam_vel);
+			}
+		}
+		else{
+			move_camera(cam_vel);
+		}
+	}
+	
+	void align_base_cam(){
+		error_base_cam = cam_theta - base_theta;
+		ang_vel = error_base_cam * gain_base_cam;
+		
+		if(ang_vel > 0.25)
+			ang_vel = 0.25;
+		else if(ang_vel < -0.25)
+			ang_vel = -0.25;
+		move_rosbot(0.0, ang_vel);
+	}
+	
+	void link_states_callback(const gazebo_msgs::LinkStates msg){
+		int i = 0;
+		bool found = false;
+		while(true)
+		{
+			if(msg.name[i] == "rosbot::camera_link")
+			{
+				if(cam_w < 1 + 0.001 && cam_w > 1 + 0.001)
+				{
+					cam_theta = 0;
+					cam_orientation[0] = 1;
+					cam_orientation[1] = 0;
+					cam_orientation[2] = 0;
+				}else{
+					cam_w = msg.pose[i].orientation.w;
+					cam_theta = 2*acos(cam_w);
+					cam_orientation[0] = msg.pose[i].orientation.x/sin(cam_theta/2);
+					cam_orientation[1] = msg.pose[i].orientation.y/sin(cam_theta/2);
+					cam_orientation[2] = msg.pose[i].orientation.z/sin(cam_theta/2);
+					if(cam_orientation[2] < 0)
+						cam_theta = -(cam_theta-2*M_PI); 
+				}
+				
+				if(found)
+					break;
+				found = true;
+			}
+			else if(msg.name[i] == "rosbot::base_link")
+			{
+				if(base_w < 1 + 0.001 && base_w > 1 + 0.001)
+				{
+					base_theta = 0;
+					base_orientation[0] = 1;
+					base_orientation[1] = 0;
+					base_orientation[2] = 0;
+				}else{
+					base_w = msg.pose[i].orientation.w;
+					base_theta = 2*acos(base_w);
+					base_orientation[0] = msg.pose[i].orientation.x/sin(base_theta/2);
+					base_orientation[1] = msg.pose[i].orientation.y/sin(base_theta/2);
+					base_orientation[2] = msg.pose[i].orientation.z/sin(base_theta/2);
+					if(base_orientation[2] < 0)
+						base_theta = -(base_theta-2*M_PI); 
+				}
+				
+				if(found)
+					break;
+				found = true;
+			}
+			i++;	
+		}
+	}
+	
+	//simple proportional controller to get the center of the marker
+	void controller(const lab_assignment::Marker msg){
+		if(msg.id == marker_ids[index]) {
+			error = img_center - msg.center.x;
+			cam_vel = error * gain;
+			if(cam_vel>1.5){
+				cam_vel = 1.5;
+			}else if(cam_vel<-1.5)
+				cam_vel = -1.5;
+		}
+	}
 
-        // Advertise publishers for robot control
-        cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
-        search_id_pub = nh.advertise<std_msgs::Int32>("/rosbot/search_id", 10);
-    }
-
-    // Callback function for the marker topic
-    /**
-     * @brief Callback function for the Aruco marker topic. Handles marker detection and robot movement.
-     * @param msg The marker message containing ID, area, and position information.
-     */
-    void marker_callback(const lab_assignment::Marker msg)
-    {
-        // Use the controller to correct the position of the robot
-        controller(msg);
-
-        // Search for a new marker
-        if (msg.id == -1)
-        {
-            set_target.data = marker_ids[index];
-            search_id_pub.publish(set_target);
-            move_rosbot(0.0, ang_vel);
-        }
-        // If target found, go to the next one
-        else if (msg.area >= target_area_size)
-        {
-            index++;
-            //if the rosbot found all the markers shutdown this node
-            if(index == number_of_markers)
-            {
-            	move_rosbot(0.0, 0.0);
-            	ros::shutdown();
-            }
-            ang_vel = 0.8;
-            move_rosbot(0.0, ang_vel);
-            set_target.data = marker_ids[index];
-            search_id_pub.publish(set_target);
-        }
-        // If the center is aligned, move forward; else, correct position
-        else if (msg.center.x < (320 + 10) && msg.center.x > (320 - 10))
-        {
-            move_rosbot(lin_vel, 0.0);
-        }
-        else
-        {
-            move_rosbot(0.0, ang_vel);
-        }
-    }
-
-    // Simple proportional controller to get the center of the marker
-    /**
-     * @brief Simple proportional controller to adjust the robot's orientation based on the marker's position.
-     * @param msg The marker message containing ID, area, and position information.
-     */
-    void controller(const lab_assignment::Marker msg)
-    {
-        if (msg.id == marker_ids[index])
-        {
-            error = img_center - msg.center.x;
-            ang_vel = error * gain;
-        }
-    }
-
-    // Move the robot using the provided linear and angular velocities
-    /**
-     * @brief Moves the robot by publishing linear and angular velocities to the cmd_vel topic.
-     * @param lin_x Linear velocity along the x-axis.
-     * @param ang_z Angular velocity around the z-axis.
-     */
-    void move_rosbot(double lin_x, double ang_z)
-    {
-        geometry_msgs::Twist cmd_vel_msg;
-        cmd_vel_msg.angular.z = ang_z;
-        cmd_vel_msg.linear.x = lin_x;
-        cmd_vel_pub.publish(cmd_vel_msg);
-    }
+	//move the robot
+	void move_rosbot(double lin_x,double ang_z)
+	{
+		geometry_msgs::Twist cmd_vel_msg;
+	    	cmd_vel_msg.angular.z = ang_z;
+	    	cmd_vel_msg.linear.x = lin_x;
+		cmd_vel_pub.publish(cmd_vel_msg);	
+	}
+	
+	//move the camera
+	void move_camera(double vel)
+	{
+		std_msgs::Float64 cam_vel_msg;
+		cam_vel_msg.data = vel;
+		cam_vel_pub.publish(cam_vel_msg);
+	}
 };
 
-// Main function
-/**
- * @brief The main function initializes the ROS node and creates an instance of the Logic class.
- * @param argc Number of command-line arguments.
- * @param argv Array of command-line arguments.
- * @return Exit status.
- */
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-    // Initialize the ROS node
-    ros::init(argc, argv, "logic_node");
+	// Initialize the ROS node
+	ros::init(argc, argv, "logic_node");
+	sleep(4);
+	
+	Logic node;
 
-    // Create an instance of the Logic class
-    Logic node;
-
-    // Enter the ROS spin loop
-    ros::spin();
+	ros::spin();
 }

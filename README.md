@@ -1,4 +1,4 @@
-Experimental Robotics Laboratory - First Assignment
+Experimental Robotics Laboratory 🤖
 ======================================
 Aruco Marker Robot Navigation
 ======================================

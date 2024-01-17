@@ -63,7 +63,7 @@ Move inside the package and clone our repository and the one containing the mark
 
 ```bash
 git clone https://github.com/CarmineD8/aruco_ros.git
-git clone https://github.com/MickyMori/Lab_assignment_1.git
+git clone https://github.com/manudelu/ExpRob_Assignment1.git
 ```
 
 At first, to utilize the marker textures, copy the `models` folder from the `aruco_ros` package into `/root/.gazebo/models` directory (all new models should be put here, to let the camera work properly).
